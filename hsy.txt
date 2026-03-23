@@ -1,0 +1,9 @@
+# Terminal 1 — stubs
+python stubs/run_stubs.py
+
+# Terminal 2 — orchestrator  ← THIS IS THE KEY CHANGE
+$env:ENV_FILE=".env.stub"
+uvicorn app.main:app --port 8000 --reload
+
+# Terminal 3 — demo
+python stubs/demo_client.py
