@@ -57,15 +57,20 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # ── LLM Provider ─────────────────────────────────────────────────────────
-    llm_provider: Literal["ollama", "claude", "stub"] = "ollama"
+    llm_provider: Literal["ollama", "openai", "anthropic", "groq", "grok", "stub"] = "ollama"
 
     # Ollama (free mode)
-    ollama_base_url: str = "http://ollama:11434"
-    ollama_model: str = "qwen3:0.6b"
+    ollama_base_url: str = ""
+    ollama_model: str = ""
+
+    # Groq
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    groq_api_key: str = "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"
+    xai_api_key: str = ""
 
     # Claude (paid mode)
     anthropic_api_key: str = ""
-    claude_model: str = "claude-sonnet-4-20250514"
+    claude_model: str = ""
 
     # ── LangSmith tracing (paid mode) ────────────────────────────────────────
     langchain_tracing_v2: bool = False

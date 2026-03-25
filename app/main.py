@@ -80,7 +80,7 @@ def create_app() -> FastAPI:
     # ── Health ────────────────────────────────────────────────────────────────
     @app.get("/health", tags=["health"], summary="Service liveness probe")
     async def health():
-        return {"status": "ok", "service": "orchestrator-agent"}
+        return {"status": "ok", "service": "orchestrator-agent", "llm_provider": "grok" if getattr(get_settings(), "XAI_API_KEY", "") else get_settings().llm_provider}
 
     # ── Global exception handler ──────────────────────────────────────────────
     @app.exception_handler(Exception)

@@ -29,7 +29,7 @@ from app.models import AgentName, TaskGraph, TaskNode
 
 logger = logging.getLogger(__name__)
 
-# ── Prompt templates ──────────────────────────────────────────────────────────
+# â”€â”€ Prompt templates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 _SYSTEM_PROMPT = """You are a data-analysis orchestration planner.
 Given a user query and a list of available specialist agents, produce a JSON task graph.
@@ -54,7 +54,7 @@ Rules:
 - Tasks with no dependencies run in parallel.
 - Later tasks list their prerequisite task_ids in depends_on.
 - Always include a 'report' task as the final aggregator.
-- Keep payload concise — agent-specific hints only.
+- Keep payload concise â€” agent-specific hints only.
 """
 
 _USER_TEMPLATE = "Query: {query}\nContext ID: {context_id}"
@@ -65,7 +65,7 @@ _CORRECTION_TEMPLATE = """Your previous response was not valid JSON. Here is the
 Please respond ONLY with valid JSON matching the schema. No markdown. No explanation."""
 
 
-# ── Internal helpers ──────────────────────────────────────────────────────────
+# â”€â”€ Internal helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _extract_json(text: str) -> str:
     """Strip markdown fences and return the first JSON object found."""
@@ -91,42 +91,6 @@ def _parse_graph(raw: str) -> TaskGraph:
 
     return TaskGraph(**data)
 
-
-# ── Provider-specific callers ─────────────────────────────────────────────────
-
-async def _call_ollama(messages: list[dict], settings) -> str:
-    payload = {
-        "model":  settings.ollama_model,
-        "stream": False,
-        "options": {"temperature": settings.planning_temperature},
-        "messages": messages,
-    }
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(
-            f"{settings.ollama_base_url}/api/chat",
-            json=payload,
-        )
-        resp.raise_for_status()
-        return resp.json()["message"]["content"]
-
-
-async def _call_claude(messages: list[dict], settings) -> str:
-    import anthropic  # lazy import — not installed in free mode
-
-    system_msg = next(
-        (m["content"] for m in messages if m["role"] == "system"), ""
-    )
-    user_msgs = [m for m in messages if m["role"] != "system"]
-
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    response = await client.messages.create(
-        model=settings.claude_model,
-        max_tokens=2048,
-        temperature=settings.planning_temperature,
-        system=system_msg,
-        messages=user_msgs,
-    )
-    return response.content[0].text
 
 
 async def _call_stub(query: str) -> str:
@@ -214,22 +178,57 @@ async def _call_stub(query: str) -> str:
 
 
 async def _llm_call(messages: list[dict], settings) -> str:
-    if settings.llm_provider == "stub":
-        # Extract query from the user message in messages list
+    provider = settings.llm_provider
+
+    if provider == "stub":
         user_content = next(
             (m["content"] for m in messages if m["role"] == "user"), ""
         )
-        # Pull query text out of template
         import re as _re
         m = _re.search(r"Query: (.+?)(?:\nContext ID|\.?\.?\.?$)", user_content, _re.DOTALL)
         query = m.group(1).strip() if m else user_content
         return await _call_stub(query)
-    if settings.llm_provider == "claude":
-        return await _call_claude(messages, settings)
-    return await _call_ollama(messages, settings)
+
+    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+    from langchain_groq import ChatGroq
+    from langchain_openai import ChatOpenAI
+    from langchain_anthropic import ChatAnthropic
+    from langchain_community.chat_models import ChatOllama
+
+    # Auto-select Groq when API key is present and provider isn't forced to ollama
+    if getattr(settings, "XAI_API_KEY", "") and provider not in ("ollama", "claude", "stub"):
+        logger.info("Orchestrator LLM: Grok (XAI_API_KEY detected)")
+        provider = "grok"
+    elif getattr(settings, "groq_api_key", "") and provider not in ("ollama", "claude", "stub"):
+        logger.info("Orchestrator LLM: Groq (GROQ_API_KEY detected)")
+        provider = "groq"
+
+    lc_messages = []
+    for m in messages:
+        if m["role"] == "system":
+            lc_messages.append(SystemMessage(content=m["content"]))
+        elif m["role"] == "user":
+            lc_messages.append(HumanMessage(content=m["content"]))
+        elif m["role"] == "assistant":
+            lc_messages.append(AIMessage(content=m["content"]))
+
+    if provider == "claude":
+        llm = ChatAnthropic(api_key=settings.anthropic_api_key, model_name=settings.claude_model, temperature=settings.planning_temperature)
+    elif provider == "groq":
+        llm = ChatGroq(api_key=settings.groq_api_key, model_name=settings.groq_model, temperature=settings.planning_temperature)
+    elif provider == "grok":
+        llm = ChatOpenAI(api_key=settings.XAI_API_KEY, base_url="https://api.x.ai/v1", model="grok-2-latest", temperature=settings.planning_temperature)
+    elif provider == "mcp":
+        # MCP Placeholder
+        llm = ChatOpenAI(api_key=getattr(settings, "OPENAI_API_KEY", ""), model_name="gpt-4o", temperature=settings.planning_temperature)
+    else:
+        llm = ChatOllama(base_url=settings.ollama_base_url, model=settings.ollama_model, temperature=settings.planning_temperature)
+
+    response = await llm.ainvoke(lc_messages)
+    return response.content
 
 
-# ── Public planning function ──────────────────────────────────────────────────
+# â”€â”€ Public planning function â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async def plan_query(query: str, context_id: str) -> TaskGraph:
     """
@@ -255,7 +254,7 @@ async def plan_query(query: str, context_id: str) -> TaskGraph:
             return graph
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
             if attempt < settings.planning_max_retries:
-                logger.warning("JSON parse error (attempt %d): %s — retrying with correction", attempt, exc)
+                logger.warning("JSON parse error (attempt %d): %s â€” retrying with correction", attempt, exc)
                 messages.append({"role": "assistant", "content": raw})
                 messages.append({
                     "role": "user",
