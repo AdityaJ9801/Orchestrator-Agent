@@ -9,11 +9,6 @@ Priority (highest → lowest):
   5. .env.paid  (Claude / production)
   6. .env       (generic fallback)
   7. Field defaults  (Docker service names as last resort)
-
-Why this matters: pydantic-settings loads env files in order and later files
-override earlier ones if the SAME key appears in multiple files. By detecting
-the ENV_FILE variable and loading only that single file, we avoid Docker
-hostnames silently overriding localhost URLs set in the shell.
 """
 from __future__ import annotations
 
@@ -25,20 +20,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _active_env_files() -> tuple[str, ...]:
-    """
-    Return the env-file(s) to load, in priority order (last wins in
-    pydantic-settings when the same key appears in multiple files).
-
-    If ENV_FILE is set, ONLY that file is loaded — shell env vars still win
-    because pydantic-settings always prefers the process environment over
-    any file.
-    """
+    """Return env-file(s) to load. If ENV_FILE is set, load only that file."""
     explicit = os.environ.get("ENV_FILE", "").strip()
     if explicit:
         return (explicit,)
-
-    # Auto-detect: load all known files; pydantic-settings merges them and
-    # shell env vars always take top priority.
     candidates = (".env.paid", ".env.free", ".env.stub", ".env")
     return tuple(f for f in candidates if os.path.isfile(f))
 
@@ -47,7 +32,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=_active_env_files(),
         env_file_encoding="utf-8",
-        env_ignore_empty=True,   # empty string in file ≠ override
+        env_ignore_empty=True,
         extra="ignore",
     )
 
@@ -56,23 +41,31 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "INFO"
 
+    # ── CORS ──────────────────────────────────────────────────────────────────
+    cors_origins: str = "*"  # comma-separated list or "*"
+
     # ── LLM Provider ─────────────────────────────────────────────────────────
     llm_provider: Literal["ollama", "openai", "anthropic", "groq", "grok", "stub"] = "ollama"
 
     # Ollama (free mode)
-    ollama_base_url: str = ""
-    ollama_model: str = ""
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.1:8b"
 
     # Groq
-    GROQ_MODEL: str = "llama-3.1-8b-instant"
-    groq_api_key: str = "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"
+    groq_model: str = "llama-3.1-8b-instant"
+    groq_api_key: str = ""
+
+    # xAI / Grok
     xai_api_key: str = ""
+
+    # OpenAI
+    openai_api_key: str = ""
 
     # Claude (paid mode)
     anthropic_api_key: str = ""
-    claude_model: str = ""
+    claude_model: str = "claude-3-5-sonnet-20241022"
 
-    # ── LangSmith tracing (paid mode) ────────────────────────────────────────
+    # ── LangSmith tracing ────────────────────────────────────────────────────
     langchain_tracing_v2: bool = False
     langchain_api_key: str = ""
 
@@ -104,8 +97,14 @@ class Settings(BaseSettings):
     agent_timeout_seconds: float = 30.0
 
     # ── LLM planning ─────────────────────────────────────────────────────────
-    planning_max_retries: int = 1  # 1 retry on invalid JSON
+    planning_max_retries: int = 1
     planning_temperature: float = 0.2
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        if self.cors_origins.strip() == "*":
+            return ["*"]
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     @property
     def agent_registry(self) -> dict[str, str]:

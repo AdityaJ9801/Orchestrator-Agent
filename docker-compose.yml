@@ -5,18 +5,12 @@ networks:
     driver: bridge
 
 volumes:
-  ollama-data:      # persists Ollama models (~5GB)
+  ollama-data:
   redis-data:
-  local-data:       # put your CSV/Parquet files here
-  hf-cache:         # HuggingFace model cache (~400MB)
-  ml-models:
-  chart-output:
-  report-output:
-  context-cache:
 
 services:
 
-  # ── LLM (Ollama — runs models locally) ──────────────────────
+  # ── LLM (Ollama — runs models locally) ───────────────────────────────────
   ollama:
     image: ollama/ollama:latest
     ports: ["11434:11434"]
@@ -33,18 +27,24 @@ services:
       timeout: 10s
       retries: 5
 
-  # ── Cache / Queue ────────────────────────────────────────────
+  # ── Cache ─────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
     volumes: [redis-data:/data]
     networks: [gemrslize-net]
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
-  # ── Orchestrator ─────────────────────────────────────────────
+  # ── Orchestrator ──────────────────────────────────────────────────────────
   orchestrator:
-    build: ./orchestrator-agent
-    ports: ["8000:8000"]           # ONLY public-facing port
+    build: .
+    ports: ["8000:8000"]
+    env_file: .env.free
     environment:
       LLM_PROVIDER: ollama
       OLLAMA_BASE_URL: http://ollama:11434
@@ -56,5 +56,10 @@ services:
       ML_AGENT_URL: http://ml-agent:8004
       NLP_AGENT_URL: http://nlp-agent:8005
       REPORT_AGENT_URL: http://report-agent:8006
-    depends_on: [ollama, redis]
+    depends_on:
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
     networks: [gemrslize-net]
+    restart: unless-stopped

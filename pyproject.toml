@@ -1,8 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "orchestrator-agent"
+version = "1.0.0"
+description = "Central planner for the GEMRSLIZE multi-agent data analysis platform"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
 [tool.pytest.ini_options]
-asyncio_mode        = "auto"
-testpaths           = ["tests"]
-python_files        = ["test_*.py"]
-python_functions    = ["test_*"]
-log_cli             = true
-log_cli_level       = "WARNING"
-filterwarnings      = ["ignore::DeprecationWarning"]
+asyncio_mode    = "auto"
+testpaths       = ["tests"]
+python_files    = ["test_*.py"]
+python_functions = ["test_*"]
+log_cli         = true
+log_cli_level   = "WARNING"
+filterwarnings  = ["ignore::DeprecationWarning"]

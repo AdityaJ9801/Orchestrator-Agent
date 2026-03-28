@@ -1,29 +1,14 @@
-"""
-Integration tests for the parallel execution engine using httpx.MockTransport.
-
-Scenarios tested
-----------------
-1. All agents succeed → all tasks COMPLETED.
-2. An agent times out → task FAILED, downstream tasks SKIPPED.
-3. Max parallelism: tasks with no shared deps run concurrently.
-4. Dependency chain: sequential execution when depends_on is set.
-5. Unknown agent in graph → task FAILED, does not crash engine.
-6. on_task_start and on_task_done hooks are called exactly once per task.
-"""
+"""Tests for the parallel execution engine (app/executor.py)."""
 from __future__ import annotations
 
-import asyncio
-import json
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
 
 from app.executor import execute_graph
 from app.models import AgentName, TaskGraph, TaskNode, TaskResult, TaskStatus
-
-# ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
 def _graph(*nodes: TaskNode) -> TaskGraph:
@@ -45,8 +30,9 @@ def _node(
     )
 
 
-def _ok_transport(result: Any = {"ok": True}) -> httpx.MockTransport:
-    """A transport that always returns HTTP 200 with *result* as JSON."""
+def _ok_transport(result: Any = None) -> httpx.MockTransport:
+    if result is None:
+        result = {"ok": True}
 
     def _handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=result)
@@ -54,16 +40,19 @@ def _ok_transport(result: Any = {"ok": True}) -> httpx.MockTransport:
     return httpx.MockTransport(_handler)
 
 
-def _timeout_transport() -> httpx.MockTransport:
-    """A transport that always raises ReadTimeout."""
+def _error_transport(status_code: int, body: str = "") -> httpx.MockTransport:
+    def _handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status_code, text=body)
 
+    return httpx.MockTransport(_handler)
+
+
+def _timeout_transport() -> httpx.MockTransport:
     def _handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("timed out", request=request)
 
     return httpx.MockTransport(_handler)
 
-
-# ── Patch settings so we have proper URLs ────────────────────────────────────
 
 MOCK_REGISTRY = {
     "context": "http://context-agent:8001",
@@ -75,16 +64,12 @@ MOCK_REGISTRY = {
 }
 
 
-def _patch_registry():
+def _patch_registry(registry: dict | None = None):
     mock_settings = MagicMock()
-    mock_settings.agent_registry     = MOCK_REGISTRY
+    mock_settings.agent_registry = registry or MOCK_REGISTRY
     mock_settings.agent_timeout_seconds = 30.0
     return patch("app.executor.get_settings", return_value=mock_settings)
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# 1. Happy path — all agents succeed
-# ═══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
 async def test_all_tasks_complete():
@@ -103,36 +88,25 @@ async def test_all_tasks_complete():
     assert statuses["t3"] == TaskStatus.COMPLETED
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 2. Timeout → FAILED; dependents → SKIPPED
-# ═══════════════════════════════════════════════════════════════════════════════
-
 @pytest.mark.asyncio
 async def test_timeout_propagates_skip():
-    timeout_client = httpx.AsyncClient(transport=_timeout_transport())
-
     graph = _graph(
         _node("t1", AgentName.SQL),
         _node("t2", AgentName.REPORT, depends_on=["t1"]),
     )
+    client = httpx.AsyncClient(transport=_timeout_transport())
     with _patch_registry():
-        results = await execute_graph(graph, http_client=timeout_client)
+        results = await execute_graph(graph, http_client=client)
 
     statuses = {r.task_id: r.status for r in results}
     assert statuses["t1"] == TaskStatus.FAILED
     assert statuses["t2"] == TaskStatus.SKIPPED
-    # Error message mentions timeout
     failed = next(r for r in results if r.task_id == "t1")
     assert "timed out" in (failed.error or "").lower()
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 3. Parallel execution — tasks with no shared deps run concurrently
-# ═══════════════════════════════════════════════════════════════════════════════
-
 @pytest.mark.asyncio
 async def test_parallel_tasks_all_complete():
-    """t1, t2, t3 have no dependencies — all should be dispatched in one gather."""
     graph = _graph(
         _node("t1", AgentName.SQL),
         _node("t2", AgentName.VIZ),
@@ -147,13 +121,8 @@ async def test_parallel_tasks_all_complete():
         assert r.status == TaskStatus.COMPLETED
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 4. Dependency chain: sequential order respected
-# ═══════════════════════════════════════════════════════════════════════════════
-
 @pytest.mark.asyncio
 async def test_dependency_chain_order():
-    """Verify that t2 starts only after t1 completes (by inspecting started_at)."""
     graph = _graph(
         _node("t1", AgentName.CONTEXT),
         _node("t2", AgentName.SQL, depends_on=["t1"]),
@@ -163,28 +132,18 @@ async def test_dependency_chain_order():
         results = await execute_graph(graph, http_client=client)
 
     by_id = {r.task_id: r for r in results}
-    # t2 must start after t1 ended
     assert by_id["t2"].started_at >= by_id["t1"].ended_at  # type: ignore[operator]
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 5. Unknown agent → FAILED, does not crash the engine
-# ═══════════════════════════════════════════════════════════════════════════════
-
 @pytest.mark.asyncio
 async def test_unknown_agent_fails_gracefully():
-    # Patch registry without "nlp"
-    sparse_registry = {k: v for k, v in MOCK_REGISTRY.items() if k != "nlp"}
-    mock_settings = MagicMock()
-    mock_settings.agent_registry     = sparse_registry
-    mock_settings.agent_timeout_seconds = 30.0
-
+    sparse = {k: v for k, v in MOCK_REGISTRY.items() if k != "nlp"}
     graph = _graph(
-        _node("t1", AgentName.NLP),   # NLP not in registry
+        _node("t1", AgentName.NLP),
         _node("t2", AgentName.REPORT, depends_on=["t1"]),
     )
     client = httpx.AsyncClient(transport=_ok_transport())
-    with patch("app.executor.get_settings", return_value=mock_settings):
+    with _patch_registry(sparse):
         results = await execute_graph(graph, http_client=client)
 
     statuses = {r.task_id: r.status for r in results}
@@ -192,14 +151,10 @@ async def test_unknown_agent_fails_gracefully():
     assert statuses["t2"] == TaskStatus.SKIPPED
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 6. Hooks fired exactly once per task
-# ═══════════════════════════════════════════════════════════════════════════════
-
 @pytest.mark.asyncio
 async def test_hooks_called_once_per_task():
     started: list[str] = []
-    done:    list[str] = []
+    done: list[str] = []
 
     async def on_start(r: TaskResult) -> None:
         started.append(r.task_id)
@@ -225,19 +180,98 @@ async def test_hooks_called_once_per_task():
     assert sorted(done)    == ["t1", "t2", "t3"]
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 7. HTTP 500 from agent → FAILED, does not crash engine
-# ═══════════════════════════════════════════════════════════════════════════════
-
 @pytest.mark.asyncio
-async def test_http_error_marks_task_failed():
-    def _error_handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(500, text="Internal Server Error")
-
-    client = httpx.AsyncClient(transport=httpx.MockTransport(_error_handler))
+async def test_http_500_marks_task_failed():
+    client = httpx.AsyncClient(transport=_error_transport(500, "Internal Server Error"))
     graph = _graph(_node("t1", AgentName.SQL))
     with _patch_registry():
         results = await execute_graph(graph, http_client=client)
 
     assert results[0].status == TaskStatus.FAILED
     assert "500" in (results[0].error or "")
+
+
+@pytest.mark.asyncio
+async def test_http_404_marks_task_failed():
+    client = httpx.AsyncClient(transport=_error_transport(404, "Not Found"))
+    graph = _graph(_node("t1", AgentName.SQL))
+    with _patch_registry():
+        results = await execute_graph(graph, http_client=client)
+
+    assert results[0].status == TaskStatus.FAILED
+    assert "404" in (results[0].error or "")
+
+
+@pytest.mark.asyncio
+async def test_dependency_context_forwarded():
+    """Downstream task payload must include _context key."""
+    received_payloads: list[dict] = []
+
+    def _capture(request: httpx.Request) -> httpx.Response:
+        import json as _json
+        try:
+            body = _json.loads(request.content)
+            received_payloads.append(body)
+        except Exception:
+            pass
+        return httpx.Response(200, json={"ok": True})
+
+    graph = _graph(
+        _node("t1", AgentName.CONTEXT),
+        _node("t2", AgentName.SQL, depends_on=["t1"]),
+    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(_capture))
+    with _patch_registry():
+        await execute_graph(graph, http_client=client)
+
+    # t2 must have received a payload with _context key
+    t2_payload = next((p for p in received_payloads if "_context" in p), None)
+    assert t2_payload is not None, "t2 payload should contain _context key"
+    # _context is a dict (may be empty if t1 result was None, but key must exist)
+    assert isinstance(t2_payload["_context"], dict)
+
+
+@pytest.mark.asyncio
+async def test_empty_graph_returns_empty_list():
+    graph = TaskGraph(intent="empty", tasks=[])
+    with _patch_registry():
+        results = await execute_graph(graph)
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_single_task_no_deps_completes():
+    graph = _graph(_node("t1", AgentName.REPORT))
+    client = httpx.AsyncClient(transport=_ok_transport({"report": "done"}))
+    with _patch_registry():
+        results = await execute_graph(graph, http_client=client)
+
+    assert len(results) == 1
+    assert results[0].status == TaskStatus.COMPLETED
+    assert results[0].result == {"report": "done"}
+
+
+@pytest.mark.asyncio
+async def test_all_tasks_fail_returns_results():
+    graph = _graph(
+        _node("t1", AgentName.SQL),
+        _node("t2", AgentName.VIZ),
+    )
+    client = httpx.AsyncClient(transport=_error_transport(503, "Service Unavailable"))
+    with _patch_registry():
+        results = await execute_graph(graph, http_client=client)
+
+    assert len(results) == 2
+    for r in results:
+        assert r.status == TaskStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_task_result_duration_ms():
+    graph = _graph(_node("t1", AgentName.SQL))
+    client = httpx.AsyncClient(transport=_ok_transport())
+    with _patch_registry():
+        results = await execute_graph(graph, http_client=client)
+
+    assert results[0].duration_ms is not None
+    assert results[0].duration_ms >= 0

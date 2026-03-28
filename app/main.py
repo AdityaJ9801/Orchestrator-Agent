@@ -63,12 +63,12 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
     )
 
-    # CORS (restrictive in production — adjust as needed)
+    # CORS — configure CORS_ORIGINS env var for production (comma-separated)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=settings.cors_origins_list,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
     )
 
     # ── Routes ────────────────────────────────────────────────────────────────
@@ -80,7 +80,8 @@ def create_app() -> FastAPI:
     # ── Health ────────────────────────────────────────────────────────────────
     @app.get("/health", tags=["health"], summary="Service liveness probe")
     async def health():
-        return {"status": "ok", "service": "orchestrator-agent", "llm_provider": "grok" if getattr(get_settings(), "XAI_API_KEY", "") else get_settings().llm_provider}
+        s = get_settings()
+        return {"status": "ok", "service": "orchestrator-agent", "llm_provider": s.llm_provider}
 
     # ── Global exception handler ──────────────────────────────────────────────
     @app.exception_handler(Exception)
