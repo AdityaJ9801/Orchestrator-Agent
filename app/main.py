@@ -81,7 +81,23 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["health"], summary="Service liveness probe")
     async def health():
         s = get_settings()
-        return {"status": "ok", "service": "orchestrator-agent", "llm_provider": s.llm_provider}
+        provider = str(getattr(s, "llm_provider", "unknown"))
+        model = ""
+        if provider == "azure_openai":
+            model = getattr(s, "azure_openai_deployment_name", "")
+        elif provider == "groq":
+            model = getattr(s, "groq_model", "")
+        elif provider == "openai":
+            model = "gpt-4o"
+        elif provider == "ollama":
+            model = getattr(s, "ollama_model", "")
+            
+        return {
+            "status": "ok", 
+            "service": "orchestrator-agent", 
+            "llm_provider": provider,
+            "llm_model": model
+        }
 
     # ── Global exception handler ──────────────────────────────────────────────
     @app.exception_handler(Exception)

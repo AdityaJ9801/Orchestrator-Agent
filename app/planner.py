@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # ── Prompt templates ──────────────────────────────────────────────────────────
 
 _SYSTEM_PROMPT = """You are a data-analysis orchestration planner.
-Given a user query and a list of available specialist agents, produce a JSON task graph.
+Given a user query and a context_id (cached dataset schema), produce a JSON task graph.
 
 Available agents: context, sql, viz, ml, nlp, report
 
@@ -47,6 +47,8 @@ Rules:
 - Tasks with no dependencies run in parallel.
 - Later tasks list their prerequisite task_ids in depends_on.
 - Always include a 'report' task as the final aggregator.
+- The first task should be 'context' agent with payload: {"context_id": "<context_id>"} to retrieve cached schema.
+- SQL tasks should depend on the context task and use payload: {"query": "<sql question>"}.
 - Keep payload concise — agent-specific hints only.
 """
 
@@ -80,7 +82,7 @@ def _parse_graph(raw: str) -> TaskGraph:
     return TaskGraph(**data)
 
 
-async def _call_stub(query: str) -> str:
+async def _call_stub(query: str, context_id: str) -> str:
     """
     Return a canned TaskGraph JSON without calling any LLM.
     Performs simple keyword matching to pick a realistic agent mix.
@@ -92,7 +94,7 @@ async def _call_stub(query: str) -> str:
         "task_id":     "t01",
         "agent":       "context",
         "description": "Fetch dataset schema and metadata",
-        "payload":     {"query": query},
+        "payload":     {"query": query, "context_id": context_id},
         "depends_on":  [],
     })
 
@@ -164,15 +166,13 @@ async def _llm_call(messages: list[dict], settings) -> str:
         )
         m = re.search(r"Query: (.+?)(?:\nContext ID|$)", user_content, re.DOTALL)
         query = m.group(1).strip() if m else user_content
-        return await _call_stub(query)
+        # Extract context_id from user message
+        ctx_match = re.search(r"Context ID: (.+?)$", user_content, re.MULTILINE)
+        ctx_id = ctx_match.group(1).strip() if ctx_match else ""
+        return await _call_stub(query, ctx_id)
 
     from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-    # Auto-select provider based on available API keys
-    if settings.xai_api_key and provider not in ("ollama", "anthropic", "stub"):
-        provider = "grok"
-    elif settings.groq_api_key and provider not in ("ollama", "anthropic", "stub"):
-        provider = "groq"
 
     logger.info("Orchestrator LLM provider: %s", provider)
 
@@ -212,6 +212,15 @@ async def _llm_call(messages: list[dict], settings) -> str:
         llm = ChatOpenAI(
             api_key=settings.openai_api_key,
             model="gpt-4o",
+            temperature=settings.planning_temperature,
+        )
+    elif provider == "azure_openai":
+        from langchain_openai import AzureChatOpenAI
+        llm = AzureChatOpenAI(
+            api_key=settings.azure_openai_api_key,
+            azure_endpoint=settings.azure_openai_endpoint,
+            azure_deployment=settings.azure_openai_deployment_name,
+            api_version=settings.azure_openai_api_version,
             temperature=settings.planning_temperature,
         )
     else:  # ollama

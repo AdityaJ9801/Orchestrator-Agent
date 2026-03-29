@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+
+# Env files (never commit real credentials)
+.env
+.env.free
+.env.paid
+.env.local
+# Data
+data/
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+*.log
+.kiro/

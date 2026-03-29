@@ -24,7 +24,7 @@ def _active_env_files() -> tuple[str, ...]:
     explicit = os.environ.get("ENV_FILE", "").strip()
     if explicit:
         return (explicit,)
-    candidates = (".env.paid", ".env.free", ".env.stub", ".env")
+    candidates = (".env.local",)
     return tuple(f for f in candidates if os.path.isfile(f))
 
 
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     cors_origins: str = "*"  # comma-separated list or "*"
 
     # ── LLM Provider ─────────────────────────────────────────────────────────
-    llm_provider: Literal["ollama", "openai", "anthropic", "groq", "grok", "stub"] = "ollama"
+    llm_provider: Literal["ollama", "openai", "anthropic", "groq", "grok", "stub", "azure_openai"] = "azure_openai"
 
     # Ollama (free mode)
     ollama_base_url: str = "http://localhost:11434"
@@ -60,6 +60,12 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str = ""
+    
+    # Azure OpenAI
+    azure_openai_api_key: str = ""
+    azure_openai_endpoint: str = ""
+    azure_openai_deployment_name: str = ""
+    azure_openai_api_version: str = "2024-02-15-preview"
 
     # Claude (paid mode)
     anthropic_api_key: str = ""
