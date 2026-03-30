@@ -1,0 +1,31 @@
+order_id,customer_id,product,category,quantity,unit_price,revenue,region,order_date,status
+1001,C001,Laptop Pro,Electronics,1,1299.99,1299.99,North,2024-01-05,completed
+1002,C002,Wireless Mouse,Electronics,3,29.99,89.97,South,2024-01-06,completed
+1003,C003,Office Chair,Furniture,2,249.99,499.98,East,2024-01-07,completed
+1004,C004,Notebook,Stationery,10,4.99,49.90,West,2024-01-08,completed
+1005,C005,Monitor 4K,Electronics,1,599.99,599.99,North,2024-01-10,completed
+1006,C006,Standing Desk,Furniture,1,799.99,799.99,South,2024-01-11,returned
+1007,C007,Keyboard,Electronics,2,89.99,179.98,East,2024-01-12,completed
+1008,C008,Headphones,Electronics,1,199.99,199.99,West,2024-01-13,completed
+1009,C009,Pen Set,Stationery,5,12.99,64.95,North,2024-01-15,completed
+1010,C010,Webcam,Electronics,2,79.99,159.98,South,2024-01-16,completed
+1011,C001,USB Hub,Electronics,1,39.99,39.99,North,2024-01-18,completed
+1012,C011,Ergonomic Chair,Furniture,1,349.99,349.99,East,2024-01-19,completed
+1013,C012,Laptop Pro,Electronics,1,1299.99,1299.99,West,2024-01-20,completed
+1014,C013,Whiteboard,Stationery,1,89.99,89.99,North,2024-01-21,completed
+1015,C014,SSD 1TB,Electronics,2,119.99,239.98,South,2024-01-22,completed
+1016,C015,Desk Lamp,Furniture,3,34.99,104.97,East,2024-01-23,completed
+1017,C016,Gaming Mouse,Electronics,1,59.99,59.99,West,2024-01-24,returned
+1018,C017,Bookshelf,Furniture,1,189.99,189.99,North,2024-01-25,completed
+1019,C018,Notebook,Stationery,20,4.99,99.80,South,2024-01-26,completed
+1020,C019,Monitor 4K,Electronics,2,599.99,1199.98,East,2024-01-27,completed
+1021,C020,Laptop Pro,Electronics,1,1299.99,1299.99,West,2024-01-28,completed
+1022,C003,Headphones,Electronics,1,199.99,199.99,East,2024-01-29,completed
+1023,C021,Office Chair,Furniture,3,249.99,749.97,North,2024-01-30,completed
+1024,C022,Keyboard,Electronics,1,89.99,89.99,South,2024-02-01,completed
+1025,C023,USB Hub,Electronics,2,39.99,79.98,East,2024-02-02,completed
+1026,C024,Pen Set,Stationery,8,12.99,103.92,West,2024-02-03,completed
+1027,C025,Standing Desk,Furniture,1,799.99,799.99,North,2024-02-04,completed
+1028,C026,Webcam,Electronics,1,79.99,79.99,South,2024-02-05,completed
+1029,C027,SSD 1TB,Electronics,3,119.99,359.97,East,2024-02-06,completed
+1030,C028,Laptop Pro,Electronics,1,1299.99,1299.99,West,2024-02-07,completed

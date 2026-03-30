@@ -102,6 +102,23 @@ class AgentsStatusResponse(BaseModel):
     checked_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+# ── Dataset management ────────────────────────────────────────────────────────
+
+class DatasetMeta(BaseModel):
+    context_id: str
+    filename: str
+    file_type: str
+    row_count: int
+    columns: List[str]
+    preview: List[Dict[str, Any]]
+    size_bytes: int
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class DatasetsResponse(BaseModel):
+    datasets: List[DatasetMeta]
+
+
 # ── SSE event envelope ────────────────────────────────────────────────────────
 
 class SSEEvent(BaseModel):

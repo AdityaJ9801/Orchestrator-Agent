@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
-from app.routes import agents, analyze, plan, stream
+from app.routes import agents, analyze, datasets, plan, stream
 from app.session_store import close_redis
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -67,8 +67,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     # ── Routes ────────────────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ def create_app() -> FastAPI:
     app.include_router(stream.router)
     app.include_router(plan.router)
     app.include_router(agents.router)
+    app.include_router(datasets.router)
 
     # ── Health ────────────────────────────────────────────────────────────────
     @app.get("/health", tags=["health"], summary="Service liveness probe")

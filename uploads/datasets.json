@@ -1,0 +1,85 @@
+[
+  {
+    "context_id": "cia:local_file:fc58c93c33c2500a",
+    "filename": "sales.csv",
+    "file_type": "csv",
+    "row_count": 30,
+    "columns": [
+      "order_id",
+      "customer_id",
+      "product",
+      "category",
+      "quantity",
+      "unit_price",
+      "revenue",
+      "region",
+      "order_date",
+      "status"
+    ],
+    "preview": [
+      {
+        "order_id": 1028,
+        "customer_id": "C026",
+        "product": "Webcam",
+        "category": "Electronics",
+        "quantity": 1,
+        "unit_price": 79.99,
+        "revenue": 79.99,
+        "region": "South",
+        "order_date": "2024-02-05",
+        "status": "completed"
+      },
+      {
+        "order_id": 1016,
+        "customer_id": "C015",
+        "product": "Desk Lamp",
+        "category": "Furniture",
+        "quantity": 3,
+        "unit_price": 34.99,
+        "revenue": 104.97,
+        "region": "East",
+        "order_date": "2024-01-23",
+        "status": "completed"
+      },
+      {
+        "order_id": 1024,
+        "customer_id": "C022",
+        "product": "Keyboard",
+        "category": "Electronics",
+        "quantity": 1,
+        "unit_price": 89.99,
+        "revenue": 89.99,
+        "region": "South",
+        "order_date": "2024-02-01",
+        "status": "completed"
+      },
+      {
+        "order_id": 1018,
+        "customer_id": "C017",
+        "product": "Bookshelf",
+        "category": "Furniture",
+        "quantity": 1,
+        "unit_price": 189.99,
+        "revenue": 189.99,
+        "region": "North",
+        "order_date": "2024-01-25",
+        "status": "completed"
+      },
+      {
+        "order_id": 1009,
+        "customer_id": "C009",
+        "product": "Pen Set",
+        "category": "Stationery",
+        "quantity": 5,
+        "unit_price": 12.99,
+        "revenue": 64.95,
+        "region": "North",
+        "order_date": "2024-01-15",
+        "status": "completed"
+      }
+    ],
+    "size_bytes": 2305,
+    "uploaded_at": "2026-03-30T07:00:01.789270",
+    "local_path": "D:\\PROJECT\\AXIOM_AI_DATAANALYSIS_v2\\Orchestrator-Agent\\Orchestrator-Agent\\uploads\\a1fe7cac_sales.csv"
+  }
+]

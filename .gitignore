@@ -19,7 +19,7 @@ data/
 # IDE
 .vscode/
 .idea/
-
+uploads/
 # Docker
 *.log
 .kiro/

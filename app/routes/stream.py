@@ -74,8 +74,10 @@ async def _stream_analysis(
             "task_id":    task_id,
             "session_id": session_id,
             "intent":     graph.intent,
+            "graph":      graph.model_dump(),
             "results":    [r.model_dump() for r in results],
             "partial":    partial,
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await queue.put(_sse("result", final_payload))
 
