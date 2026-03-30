@@ -15,13 +15,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8000
 
-EXPOSE 8000
+EXPOSE ${PORT}
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
-  CMD curl -f http://localhost:8000/health || exit 1
+  CMD curl -f http://localhost:${PORT}/health || exit 1
 
-CMD ["python", "-m", "uvicorn", "app.main:app", \
-     "--host", "0.0.0.0", "--port", "8000", \
-     "--workers", "2", "--log-level", "info"]
+CMD python -m uvicorn app.main:app \
+     --host 0.0.0.0 --port ${PORT} \
+     --workers 2 --log-level info

@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from app.config import Settings, get_settings
 from app.models import DatasetMeta, DatasetsResponse
+from app.utils.storage import storage
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["datasets"])
@@ -57,7 +58,7 @@ async def upload_dataset(
     settings: Settings = Depends(get_settings),
 ) -> DatasetMeta:
     """
-    1. Saves file to local 'uploads/' directory.
+    1. Saves file to local or Azure Blob Storage.
     2. Calls Context-Intelligence-Agent to profile the file.
     3. Returns enriched metadata (context_id, stats, etc.).
     """
@@ -66,7 +67,6 @@ async def upload_dataset(
     file_id = str(uuid.uuid4())[:8]
     ext = Path(file.filename).suffix.lower()
     save_name = f"{file_id}_{file.filename}"
-    save_path = UPLOAD_DIR / save_name
     
     # Check supported formats
     fmt = "csv"
@@ -77,24 +77,23 @@ async def upload_dataset(
     elif ext not in [".csv"]:
          raise HTTPException(status_code=400, detail=f"Unsupported format: {ext}")
 
-    # 1. Save locally
+    # 1. Save to Storage
     try:
-        with open(save_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        content = await file.read()
+        file_uri = await storage.save_file(content, save_name)
     except Exception as exc:
         logger.error("Failed to save file: %s", exc)
         raise HTTPException(status_code=500, detail="Could not save file")
 
-    # Get absolute path for Context Agent (assuming shared volume or same host)
-    abs_path = str(save_path.absolute())
-    
     # 2. Call Context Agent to Profile
     context_agent_url = f"{settings.context_agent_url}/profile"
-    logger.info(f"Calling Context Agent at: {context_agent_url} for file: {abs_path}")
+    logger.info(f"Calling Context Agent at: {context_agent_url} for file: {file_uri}")
+    
+    source_type = "azure_blob" if storage.use_azure else "local_file"
     payload = {
         "source": {
-            "type": "local_file",
-            "path": abs_path,
+            "type": source_type,
+            "path": file_uri,
             "format": fmt
         }
     }
@@ -104,8 +103,7 @@ async def upload_dataset(
             resp = await client.post(context_agent_url, json=payload)
             if resp.status_code != 200:
                 logger.error(f"Context Agent failed with {resp.status_code}: {resp.text}")
-                if save_path.exists():
-                    os.remove(save_path)
+                await storage.delete_file(save_name)
                 raise HTTPException(
                     status_code=502, 
                     detail=f"Context profiling failed: {resp.text[:200]}"
@@ -116,8 +114,7 @@ async def upload_dataset(
         raise
     except Exception as exc:
         logger.exception("Error calling Context Agent")
-        if save_path.exists():
-            os.remove(save_path)
+        await storage.delete_file(save_name)
         raise HTTPException(
             status_code=502, 
             detail=f"Context Agent unreachable: {str(exc)}"
@@ -130,7 +127,7 @@ async def upload_dataset(
         row_count=context_obj.get("row_count", 0),
         columns=[c["name"] for c in context_obj.get("columns", [])],
         preview=[],  # Populate below
-        size_bytes=save_path.stat().st_size,
+        size_bytes=len(content),
         uploaded_at=datetime.utcnow()
     )
     
@@ -162,7 +159,8 @@ async def upload_dataset(
         if isinstance(entry.get("uploaded_at"), datetime):
             entry["uploaded_at"] = entry["uploaded_at"].isoformat()
         
-        entry["local_path"] = abs_path
+        entry["local_path"] = file_uri
+        entry["storage_name"] = save_name
         metadata.insert(0, entry)
         save_metadata(metadata)
     except Exception as exc:
@@ -191,12 +189,11 @@ async def delete_dataset(context_id: str):
     if not item:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
-    path = item.get("local_path")
-    if path and os.path.exists(path):
-        try:
-            os.remove(path)
-        except Exception as exc:
-            logger.warning("Failed to delete file %s: %s", path, exc)
+    storage_name = item.get("storage_name") or item.get("filename")
+    try:
+        await storage.delete_file(storage_name)
+    except Exception as exc:
+        logger.warning("Failed to delete file %s: %s", storage_name, exc)
 
     updated = [m for m in metadata if m["context_id"] != context_id]
     save_metadata(updated)

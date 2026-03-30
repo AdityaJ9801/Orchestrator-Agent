@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379"
     session_ttl_seconds: int = 3600  # 1h
 
+    # ── Azure Storage ────────────────────────────────────────────────────────
+    azure_storage_connection_string: str = ""
+    azure_storage_container_name: str = "datasets"
+
     # ── Deployment flags ─────────────────────────────────────────────────────
     use_docker: bool = True
     use_ec2: bool = False
