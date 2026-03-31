@@ -77,7 +77,7 @@ jobs:
               --cpu 0.5 \
               --memory 1Gi \
               --min-replicas 1 \
-              --max-replicas 5 \
+              --max-replicas 1 \
               --registry-server ${{ secrets.REGISTRY_LOGIN_SERVER }} \
               --registry-username ${{ secrets.REGISTRY_USERNAME }} \
               --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
