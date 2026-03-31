@@ -99,7 +99,7 @@ async def upload_dataset(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:  # 120s to survive ACA cold start
             resp = await client.post(context_agent_url, json=payload)
             if resp.status_code != 200:
                 logger.error(f"Context Agent failed with {resp.status_code}: {resp.text}")
