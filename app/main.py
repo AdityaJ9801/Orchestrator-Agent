@@ -80,6 +80,12 @@ def create_app() -> FastAPI:
     app.include_router(datasets.router)
 
     # ── Health ────────────────────────────────────────────────────────────────
+    # Root route: Azure Container Apps probes hit "/" by default.
+    # Return 200 here so the container is never killed for a 404 on "/".
+    @app.get("/", tags=["health"], include_in_schema=False)
+    async def root():
+        return {"status": "ok", "service": "orchestrator-agent"}
+
     @app.get("/health", tags=["health"], summary="Service liveness probe")
     async def health():
         s = get_settings()
