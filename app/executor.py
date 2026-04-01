@@ -55,6 +55,7 @@ async def execute_graph(
     on_task_start: Optional[Callable[[TaskResult], Coroutine]] = None,
     on_task_done:  Optional[Callable[[TaskResult], Coroutine]] = None,
     http_client:   Optional[httpx.AsyncClient] = None,
+    files: Optional[List[Dict[str, Any]]] = None,
 ) -> List[TaskResult]:
     """
     Execute the TaskGraph with maximum parallelism.
@@ -62,6 +63,8 @@ async def execute_graph(
     :param on_task_start: async hook called the moment a task begins.
     :param on_task_done:  async hook called when a task finishes (any status).
     :param http_client:   injectable httpx client (for testing with MockTransport).
+    :param files:         optional list of file attachment dicts (url, filename, mime_type)
+                          forwarded in every agent payload so agents can process uploaded files.
     """
     settings = get_settings()
     registry = settings.agent_registry
@@ -156,6 +159,9 @@ async def execute_graph(
                     for dep in task.depends_on
                     if results[dep].status == TaskStatus.COMPLETED
                 }
+                # Forward uploaded files to every agent (multimodal support)
+                if files:
+                    enriched["_files"] = files
 
                 try:
                     result = await _call_agent(

@@ -45,8 +45,9 @@ async def analyze(
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
-    # 2. Execute
-    results = await execute_graph(graph)
+    # 2. Execute (pass file attachments so every agent can access uploaded files)
+    file_dicts = [f.model_dump() for f in request.files] if request.files else None
+    results = await execute_graph(graph, files=file_dicts)
 
     partial = any(
         r.status in (TaskStatus.FAILED, TaskStatus.SKIPPED) for r in results

@@ -60,10 +60,13 @@ async def _stream_analysis(
                 "error":    r.error,
             }))
 
+        # Pass file attachments so every agent can access uploaded files (multimodal)
+        file_dicts = [f.model_dump() for f in request.files] if request.files else None
         results = await execute_graph(
             graph,
             on_task_start=on_start,
             on_task_done=on_done,
+            files=file_dicts,
         )
 
         partial = any(

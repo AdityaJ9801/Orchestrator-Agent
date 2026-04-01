@@ -66,12 +66,26 @@ class TaskResult(BaseModel):
         return None
 
 
+# ── Multimodal file attachment ─────────────────────────────────────────────────
+
+class FileAttachment(BaseModel):
+    """A file attached to an analysis request (uploaded to blob storage)."""
+    url:       str  = Field(..., description="Blob storage URL or base64 data URI")
+    filename:  str  = Field(..., description="Original filename (e.g. report.pdf, photo.png)")
+    mime_type: str  = Field("application/octet-stream", description="MIME type of the file")
+
+
 # ── API request / response ─────────────────────────────────────────────────────
 
 class AnalyzeRequest(BaseModel):
     query:      str = Field(..., min_length=3, description="Natural-language user query")
     context_id: str = Field(..., description="UUID from Context Agent's /context endpoint")
     session_id: Optional[str] = Field(None, description="Optional prior session to resume")
+    files:      Optional[List[FileAttachment]] = Field(
+        None,
+        description="Optional file attachments (images, PDFs, CSVs) uploaded to blob storage. "
+                    "These are forwarded to every agent so they can be processed as needed.",
+    )
 
 
 class PlanRequest(BaseModel):
